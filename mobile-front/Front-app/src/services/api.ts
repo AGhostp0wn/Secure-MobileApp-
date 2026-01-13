@@ -1,4 +1,5 @@
-import { getToken } from "./session";
+import { getToken, setToken, getRefreshToken, clearToken } from "./session";
+
 
 const API_URL = "http://192.168.1.47:5000";
 
@@ -13,66 +14,121 @@ export async function login(username: string, password: string) {
 }
 
 export async function getItems() {
-  const token = getToken();
+  let token = getToken();
 
-  // 🔐 Si no hay token, no llamar al backend
   if (!token) {
-    return { error: "NO_TOKEN" };
+    token = await refreshAccessToken();
+    if (!token) return { error: "NO_TOKEN" };
   }
 
-  const res = await fetch(`${API_URL}/items`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  let res = await fetch(`${API_URL}/items`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 
-  // 🔴 Manejo explícito de 401
   if (res.status === 401) {
-    return { error: "UNAUTHORIZED" };
+    token = await refreshAccessToken();
+    if (!token) {
+      clearToken();
+      return { error: "TOKEN_EXPIRED" };
+    }
+
+    // 🔁 retry
+    res = await fetch(`${API_URL}/items`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
   }
 
   return res.json();
 }
 
-export async function createItem(name: string, description: string) {
-  const token = getToken();
 
-  const res = await fetch(`${API_URL}/items`, {
+export async function createItem(name: string, description: string) {
+  let token = getToken();
+
+  if (!token) {
+    token = await refreshAccessToken();
+    if (!token) return { error: "NO_TOKEN" };
+  }
+
+  let res = await fetch(`${API_URL}/items`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      name,
-      description,
-    }),
+    body: JSON.stringify({ name, description }),
   });
+
+  if (res.status === 401) {
+    token = await refreshAccessToken();
+    if (!token) {
+      clearToken();
+      return { error: "TOKEN_EXPIRED" };
+    }
+
+    // 🔁 retry
+    res = await fetch(`${API_URL}/items`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name, description }),
+    });
+  }
 
   return res.json();
 }
 
-export async function deleteItem(id: number) {
-  const token = getToken();
 
-  const res = await fetch(`${API_URL}/items/${id}`, {
+export async function deleteItem(id: number) {
+  let token = getToken();
+
+  if (!token) {
+    token = await refreshAccessToken();
+    if (!token) return { error: "NO_TOKEN" };
+  }
+
+  let res = await fetch(`${API_URL}/items/${id}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 
+  if (res.status === 401) {
+    token = await refreshAccessToken();
+    if (!token) {
+      clearToken();
+      return { error: "TOKEN_EXPIRED" };
+    }
+
+    // 🔁 retry
+    res = await fetch(`${API_URL}/items/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
+
   return res.json();
 }
+
 
 export async function updateItem(
   id: number,
   name: string,
   description: string
 ) {
-  const token = getToken();
+  let token = getToken();
 
-  const res = await fetch(`${API_URL}/items/${id}`, {
+  if (!token) {
+    token = await refreshAccessToken();
+    if (!token) return { error: "NO_TOKEN" };
+  }
+
+  let res = await fetch(`${API_URL}/items/${id}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -81,6 +137,43 @@ export async function updateItem(
     body: JSON.stringify({ name, description }),
   });
 
+  if (res.status === 401) {
+    token = await refreshAccessToken();
+    if (!token) {
+      clearToken();
+      return { error: "TOKEN_EXPIRED" };
+    }
+
+    // 🔁 retry
+    res = await fetch(`${API_URL}/items/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name, description }),
+    });
+  }
+
   return res.json();
 }
 
+
+
+async function refreshAccessToken() {
+  const refreshToken = await getRefreshToken();
+
+  if (!refreshToken) return null;
+
+  const res = await fetch(`${API_URL}/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  setToken(data.access_token);
+  return data.access_token;
+}

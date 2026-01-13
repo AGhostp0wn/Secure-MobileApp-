@@ -13,3 +13,4 @@ class Config:
     JWT_ISSUER = os.getenv("JWT_ISSUER", "vuln-demo")
     JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "vuln-demo-mobile")
     JWT_TTL_SECONDS = int(os.getenv("JWT_TTL_SECONDS", "900"))
+    JWT_REFRESH_TTL_SECONDS = int(os.getenv("JWT_REFRESH_TTL_SECONDS", "86400"))  # 24h

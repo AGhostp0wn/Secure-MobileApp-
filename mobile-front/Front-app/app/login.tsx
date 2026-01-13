@@ -2,7 +2,7 @@ import { View, TextInput, Button, StyleSheet, Alert, Text } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { login as apiLogin } from "../src/services/api";
-import { setToken } from "../src/services/session";
+import { setToken,setRefreshToken } from "../src/services/session";
 
 export default function Login() {
   const [user, setUser] = useState("");
@@ -18,9 +18,9 @@ export default function Login() {
     try {
       const res = await apiLogin(user, pass);
 
-      if (res?.token) {
-        setToken(res.token);
-        console.log("JWT guardado:", res.token); // 👈 debug
+      if (res?.access_token) {
+        setToken(res.access_token);
+        await setRefreshToken(res.refresh_token);
         router.replace("/(tabs)");
       } else {
         Alert.alert("Login incorrecto", "Credenciales inválidas");

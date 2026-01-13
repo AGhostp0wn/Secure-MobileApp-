@@ -1,22 +1,22 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  Button,
-  ActivityIndicator,
-  TextInput,
-  ScrollView,
-} from "react-native";
-import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
-
-import { getToken, clearToken } from "../../src/services/session";
+import { useEffect, useState } from "react";
 import {
-  getItems,
+  ActivityIndicator,
+  Button,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+
+import {
   createItem,
   deleteItem,
+  getItems,
   updateItem,
 } from "../../src/services/api";
+import { clearToken, getToken } from "../../src/services/session";
 
 export default function Crud() {
   const [items, setItems] = useState<any[]>([]);
@@ -30,22 +30,30 @@ export default function Crud() {
 
   const router = useRouter();
 
+  // 🔴 ÚNICO CAMBIO: getToken() con await
   useEffect(() => {
-    const token = getToken();
+    async function checkAuthAndLoad() {
+      const token = await getToken(); // ✅ CAMBIO REAL
 
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
 
-    async function loadItems() {
       try {
         const data = await getItems();
+
+        // TOKEN EXPIRADO
+        if (data?.error === "TOKEN_EXPIRED") {
+          clearToken();
+          router.replace("/login");
+          return;
+        }
+
         if (Array.isArray(data)) {
           setItems(data);
           setError(null);
         } else {
-          setError("No autorizado. Inicia sesión.");
           setItems([]);
         }
       } catch {
@@ -56,7 +64,7 @@ export default function Crud() {
       }
     }
 
-    loadItems();
+    checkAuthAndLoad();
   }, []);
 
   const handleCreate = async () => {
@@ -67,16 +75,19 @@ export default function Crud() {
 
     try {
       const res = await createItem(name, description);
-      if (res.ok) {
-        setName("");
-        setDescription("");
-        setError(null);
 
-        const data = await getItems();
-        if (Array.isArray(data)) setItems(data);
-      } else {
-        setError("No se pudo crear el item");
+      if (res?.error === "TOKEN_EXPIRED") {
+        clearToken();
+        router.replace("/login");
+        return;
       }
+
+      setName("");
+      setDescription("");
+      setError(null);
+
+      const data = await getItems();
+      if (Array.isArray(data)) setItems(data);
     } catch {
       setError("Error al crear el item");
     }
@@ -84,7 +95,14 @@ export default function Crud() {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteItem(id);
+      const res = await deleteItem(id);
+
+      if (res?.error === "TOKEN_EXPIRED") {
+        clearToken();
+        router.replace("/login");
+        return;
+      }
+
       const data = await getItems();
       if (Array.isArray(data)) setItems(data);
     } catch {
@@ -96,7 +114,14 @@ export default function Crud() {
     if (!editingId) return;
 
     try {
-      await updateItem(editingId, name, description);
+      const res = await updateItem(editingId, name, description);
+
+      if (res?.error === "TOKEN_EXPIRED") {
+        clearToken();
+        router.replace("/login");
+        return;
+      }
+
       setEditingId(null);
       setName("");
       setDescription("");
@@ -120,7 +145,6 @@ export default function Crud() {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>📦 Mis Items</Text>
 
-      {/* FORMULARIO */}
       <View style={styles.card}>
         <Text style={styles.subtitle}>
           {editingId ? "Editar Item" : "Nuevo Item"}
@@ -148,7 +172,6 @@ export default function Crud() {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      {/* LISTA */}
       <View style={styles.list}>
         {items.map((item) => (
           <View key={item.id} style={styles.itemCard}>
@@ -177,7 +200,6 @@ export default function Crud() {
         ))}
       </View>
 
-      {/* LOGOUT */}
       <View style={styles.logout}>
         <Button
           title="Cerrar sesión"

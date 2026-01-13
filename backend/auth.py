@@ -17,6 +17,20 @@ def issue_token(user_id: int, username: str) -> str:
     }
     return jwt.encode(payload, Config.JWT_SECRET, algorithm="HS256")
 
+def issue_refresh_token(user_id: int) -> str:
+    now = int(time.time())
+    payload = {
+        "sub": str(user_id),
+        "iat": now,
+        "nbf": now,
+        "exp": now + Config.JWT_REFRESH_TTL_SECONDS,
+        "iss": Config.JWT_ISSUER,
+        "aud": Config.JWT_AUDIENCE,
+        "type": "refresh"
+    }
+    return jwt.encode(payload, Config.JWT_SECRET, algorithm="HS256")
+
+
 def decode_token(token: str) -> dict:
     return jwt.decode(
         token,
